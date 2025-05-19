@@ -15,6 +15,8 @@ import VendorDashboard from "./pages/dashboard/vendor-dashboard";
 import AdminDashboard from "./pages/dashboard/admin-dashboard";
 import ListingsPage from "./pages/listings/listings-page";
 import ItemDetail from "./pages/listings/item-detail";
+import ProfilePage from "./pages/profile/profile-page";
+import AddListingPage from "./pages/vendor/add-listing";
 import { DashboardLayout } from "./pages/dashboard/dashboard-layout";
 import NotFound from "./pages/NotFound";
 
@@ -40,6 +42,12 @@ const App = () => (
               {/* Listings */}
               <Route path="/listings" element={<ListingsPage />} />
               <Route path="/listings/:id" element={<ItemDetail />} />
+              
+              {/* Vendor routes */}
+              <Route path="/vendor/add-listing" element={<DashboardLayout allowedRoles={["vendor", "admin"]}><AddListingPage /></DashboardLayout>} />
+              
+              {/* Profile */}
+              <Route path="/profile" element={<DashboardLayout><ProfilePage /></DashboardLayout>} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>

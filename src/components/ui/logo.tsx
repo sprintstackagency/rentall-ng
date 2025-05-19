@@ -16,7 +16,7 @@ export function Logo({ className, size = "md" }: LogoProps) {
   return (
     <div className={cn("font-bold tracking-tight flex items-center", sizeClasses[size], className)}>
       <span className="text-brand">Rent</span>
-      <span>Gear</span>
+      <span>All.ng</span>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import { useMockData } from "@/context/MockDataContext";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, Package, DollarSign, Calendar } from "lucide-react";
+import { ArrowUpRight, Package, DollarSign, Calendar, Plus } from "lucide-react";
 
 export function VendorDashboard() {
   const { user } = useAuth();
@@ -36,11 +36,11 @@ export function VendorDashboard() {
                 </div>
                 <div className="bg-muted p-4 rounded-md">
                   <div className="text-sm font-medium text-muted-foreground">This Month</div>
-                  <div className="text-3xl font-bold mt-2">$890</div>
+                  <div className="text-3xl font-bold mt-2">₦89,000</div>
                 </div>
                 <div className="bg-muted p-4 rounded-md">
                   <div className="text-sm font-medium text-muted-foreground">Total Revenue</div>
-                  <div className="text-3xl font-bold mt-2">$2,450</div>
+                  <div className="text-3xl font-bold mt-2">₦245,000</div>
                 </div>
               </div>
             </CardContent>
@@ -66,7 +66,7 @@ export function VendorDashboard() {
                   </div>
                   <div>
                     <p className="font-medium">Payment Received</p>
-                    <p className="text-sm text-muted-foreground">$250 for Premium Sound System</p>
+                    <p className="text-sm text-muted-foreground">₦25,000 for Premium Sound System</p>
                   </div>
                   <p className="ml-auto text-xs text-muted-foreground">2 days ago</p>
                 </div>
@@ -117,7 +117,7 @@ export function VendorDashboard() {
                       />
                     ) : (
                       <div className="h-full w-full flex items-center justify-center">
-                        No image
+                        <Package className="h-10 w-10 text-muted-foreground" />
                       </div>
                     )}
                   </div>
@@ -125,7 +125,7 @@ export function VendorDashboard() {
                     <div>
                       <div className="flex justify-between items-start">
                         <h3 className="font-semibold text-lg">{item.title}</h3>
-                        <span className="text-brand font-bold">${item.price}/day</span>
+                        <span className="text-brand font-bold">₦{item.price}/day</span>
                       </div>
                       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                         {item.description}
@@ -158,7 +158,7 @@ export function VendorDashboard() {
             {/* Add New Listing Card */}
             <Card className="animate-fade-in border-dashed">
               <CardContent className="p-6 flex flex-col items-center justify-center text-center h-40">
-                <Package className="h-10 w-10 text-muted-foreground mb-4" />
+                <Plus className="h-10 w-10 text-muted-foreground mb-4" />
                 <h3 className="font-medium mb-2">Add New Equipment Listing</h3>
                 <Button asChild className="bg-brand hover:bg-brand-dark mt-2 button-hover-effect">
                   <Link to="/vendor/add-listing">Add Listing</Link>

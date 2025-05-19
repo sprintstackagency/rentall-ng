@@ -40,7 +40,7 @@ export function RenterDashboard() {
                 </div>
                 <div className="bg-muted p-4 rounded-md">
                   <div className="text-sm font-medium text-muted-foreground">Total Spent</div>
-                  <div className="text-3xl font-bold mt-2">$1,250</div>
+                  <div className="text-3xl font-bold mt-2">₦125,000</div>
                 </div>
               </div>
             </CardContent>
@@ -65,14 +65,14 @@ export function RenterDashboard() {
                     <p className="font-medium">LED Party Lights Pack</p>
                     <p className="text-sm text-muted-foreground">May 25 - May 27, 2023</p>
                   </div>
-                  <span className="text-brand font-medium">$240</span>
+                  <span className="text-brand font-medium">₦24,000</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">Sound System - Premium</p>
                     <p className="text-sm text-muted-foreground">June 5 - June 7, 2023</p>
                   </div>
-                  <span className="text-brand font-medium">$500</span>
+                  <span className="text-brand font-medium">₦50,000</span>
                 </div>
               </div>
             </CardContent>

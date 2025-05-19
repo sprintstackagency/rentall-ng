@@ -88,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem("rental_user", JSON.stringify(mockUser));
         toast({
           title: "Signup Successful",
-          description: `Welcome to RentGear, ${name}!`,
+          description: `Welcome to RentAll.ng, ${name}!`,
         });
       } else {
         throw new Error("Please fill all required fields");
