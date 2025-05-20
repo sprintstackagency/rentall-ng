@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext } from "react";
 import { Item, Rental, Category } from "@/types";
 
@@ -119,7 +118,7 @@ const rentals: Rental[] = [
     endDate: "2023-08-21T00:00:00Z",
     quantity: 2,
     totalPrice: 360,
-    status: "active",
+    status: "ongoing",
     createdAt: "2023-08-10T14:15:00Z"
   }
 ];
