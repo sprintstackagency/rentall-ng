@@ -14,6 +14,18 @@ export function RenterDashboard() {
   // For demo, we'll use featured items instead of actual rentals
   const featuredItems = getFeaturedItems();
 
+  // Map status from DB to display format
+  const getStatusDisplay = (status: string) => {
+    switch(status) {
+      case 'pending': return 'Pending';
+      case 'accepted': return 'Accepted';
+      case 'ongoing': return 'Active';
+      case 'completed': return 'Completed';
+      case 'cancelled': return 'Cancelled';
+      default: return status;
+    }
+  };
+
   return (
     <div className="container py-12">
       <div className="flex flex-col lg:flex-row justify-between gap-8">
