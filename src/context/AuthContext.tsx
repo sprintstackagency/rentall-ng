@@ -135,7 +135,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signup = async (email: string, password: string, name: string, role: UserRole) => {
     setIsLoading(true);
     try {
-      // Sign up with Supabase and include role in metadata
+      // Create a trigger to handle new user registration automatically
+      // This is done in the SQL migration
+      
+      // Sign up with Supabase and include name and role in metadata
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -156,10 +159,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: `Welcome to RentAll.ng, ${name}! Please check your email for verification.`,
       });
 
-      // Note: The user won't be fully logged in until they verify their email
-      // For development, you might want to disable email verification in Supabase
+      // For development purposes, we'll navigate to dashboard
+      // In production, the user would need to verify their email first
       navigate("/dashboard");
     } catch (error: any) {
+      console.error("Signup error:", error);
       toast({
         title: "Signup Failed",
         description: error.message || "Please check your information and try again",
