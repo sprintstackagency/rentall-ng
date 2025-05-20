@@ -110,16 +110,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email,
         password,
       });
-
-      if (error) {
-        throw error;
+  
+      if (error || !data?.session?.user) {
+        throw error ?? new Error("No user session returned");
       }
-
+  
+      await fetchUserProfile(data.session.user.id); // Ensure user state is set
+  
       toast({
         title: "Login Successful",
         description: "Welcome back to RentAll.ng!",
       });
-
+  
       navigate("/dashboard");
     } catch (error: any) {
       toast({
@@ -131,13 +133,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
     }
   };
+  
 
   const signup = async (email: string, password: string, name: string, role: UserRole) => {
     setIsLoading(true);
     try {
-      // Create a trigger to handle new user registration automatically
-      // This is done in the SQL migration
-      
       // Sign up with Supabase and include name and role in metadata
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -149,16 +149,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           },
         },
       });
-
+      console.log("Sign up result:", data);
+  
       if (error) {
         throw error;
       }
-
+  
+      // Create the profile after successful signup
+      const userId = data.user?.id; // Get the user ID from the signup response
+      if (userId) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([
+            {
+              id: userId,  // Use the user ID as the profile ID
+              email,
+              name,
+              role,
+            }
+          ]);
+  
+        if (profileError) {
+          throw profileError; // Handle profile creation error
+        }
+      }
+  
       toast({
         title: "Signup Successful",
         description: `Welcome to RentAll.ng, ${name}! Please check your email for verification.`,
       });
-
+  
       // For development purposes, we'll navigate to dashboard
       // In production, the user would need to verify their email first
       navigate("/dashboard");
@@ -207,7 +227,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout
       }}
     >
-      {children}
+            {children}
     </AuthContext.Provider>
   );
 };
@@ -219,3 +239,4 @@ export const useAuth = () => {
   }
   return context;
 };
+
