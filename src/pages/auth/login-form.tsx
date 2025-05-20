@@ -6,21 +6,11 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Loader } from "lucide-react";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"renter" | "vendor">("renter");
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -33,8 +23,7 @@ export function LoginForm() {
 
     try {
       await login(email, password);
-      // Redirect based on role
-      navigate("/dashboard");
+      // Navigation is handled in the login function
     } catch (error) {
       console.error("Login error:", error);
     }
@@ -69,25 +58,6 @@ export function LoginForm() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-      </div>
-      
-      <div className="space-y-2">
-        <Label htmlFor="role">Login as</Label>
-        <Select 
-          value={role} 
-          onValueChange={(value: "renter" | "vendor") => setRole(value)}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select your role" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel>Role</SelectLabel>
-              <SelectItem value="renter">Renter</SelectItem>
-              <SelectItem value="vendor">Vendor</SelectItem>
-            </SelectGroup>
-          </SelectContent>
-        </Select>
       </div>
       
       <Button type="submit" className="w-full bg-brand hover:bg-brand-dark" disabled={isLoading}>

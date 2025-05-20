@@ -36,8 +36,7 @@ export function SignupForm() {
     
     try {
       await signup(email, password, name, role);
-      // Redirect based on role
-      navigate("/dashboard");
+      // Navigation is handled in the signup function
     } catch (error) {
       console.error("Signup error:", error);
     }

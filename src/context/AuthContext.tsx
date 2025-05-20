@@ -2,6 +2,8 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { User, UserRole } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
 interface AuthContextType {
   user: User | null;
@@ -9,7 +11,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name: string, role: UserRole) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,46 +21,106 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
-  // Mock authentication for now - will be replaced with Supabase later
+  // Initialize auth and set up session listener
   useEffect(() => {
-    const storedUser = localStorage.getItem("rental_user");
-    if (storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
-        setIsAuthenticated(true);
-      } catch (error) {
-        console.error("Failed to parse user from localStorage", error);
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        console.log("Auth state changed:", event);
+        if (session && session.user) {
+          // Get user profile with role information
+          fetchUserProfile(session.user.id);
+        } else {
+          setUser(null);
+          setIsAuthenticated(false);
+          setIsLoading(false);
+        }
       }
-    }
-    setIsLoading(false);
+    );
+
+    // Check for existing session
+    const initializeAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session && session.user) {
+          await fetchUserProfile(session.user.id);
+        } else {
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Error initializing auth:", error);
+        setIsLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    // Cleanup subscription on unmount
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
+
+  // Fetch user profile with role from the profiles table
+  const fetchUserProfile = async (userId: string) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (profile) {
+        // Map Supabase profile to our User type
+        const userData: User = {
+          id: profile.id,
+          email: profile.email,
+          name: profile.name,
+          role: profile.role as UserRole,
+          phone: profile.phone || undefined,
+          address: profile.address || undefined,
+          createdAt: profile.created_at,
+        };
+
+        setUser(userData);
+        setIsAuthenticated(true);
+        console.log("User profile loaded:", userData);
+      }
+    } catch (error: any) {
+      console.error("Error fetching user profile:", error.message);
+      // If we can't get the profile, sign out for safety
+      supabase.auth.signOut();
+      setUser(null);
+      setIsAuthenticated(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // Mock login - will be replaced with Supabase
-      if (email && password) {
-        // Mock user based on email
-        const mockUser: User = {
-          id: Math.random().toString(36).substring(2, 9),
-          email,
-          role: email.includes("admin") ? "admin" : email.includes("vendor") ? "vendor" : "renter",
-          name: email.split("@")[0],
-          createdAt: new Date().toISOString(),
-        };
-        
-        setUser(mockUser);
-        setIsAuthenticated(true);
-        localStorage.setItem("rental_user", JSON.stringify(mockUser));
-        toast({
-          title: "Login Successful",
-          description: `Welcome back, ${mockUser.name}!`,
-        });
-      } else {
-        throw new Error("Invalid credentials");
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        throw error;
       }
+
+      toast({
+        title: "Login Successful",
+        description: "Welcome back to RentAll.ng!",
+      });
+
+      navigate("/dashboard");
     } catch (error: any) {
       toast({
         title: "Login Failed",
@@ -73,26 +135,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signup = async (email: string, password: string, name: string, role: UserRole) => {
     setIsLoading(true);
     try {
-      // Mock signup - will be replaced with Supabase
-      if (email && password && name) {
-        const mockUser: User = {
-          id: Math.random().toString(36).substring(2, 9),
-          email,
-          role,
-          name,
-          createdAt: new Date().toISOString(),
-        };
-        
-        setUser(mockUser);
-        setIsAuthenticated(true);
-        localStorage.setItem("rental_user", JSON.stringify(mockUser));
-        toast({
-          title: "Signup Successful",
-          description: `Welcome to RentAll.ng, ${name}!`,
-        });
-      } else {
-        throw new Error("Please fill all required fields");
+      // Sign up with Supabase and include role in metadata
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+            role,
+          },
+        },
+      });
+
+      if (error) {
+        throw error;
       }
+
+      toast({
+        title: "Signup Successful",
+        description: `Welcome to RentAll.ng, ${name}! Please check your email for verification.`,
+      });
+
+      // Note: The user won't be fully logged in until they verify their email
+      // For development, you might want to disable email verification in Supabase
+      navigate("/dashboard");
     } catch (error: any) {
       toast({
         title: "Signup Failed",
@@ -104,14 +170,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    setIsAuthenticated(false);
-    localStorage.removeItem("rental_user");
-    toast({
-      title: "Logged Out",
-      description: "You have been successfully logged out",
-    });
+  const logout = async () => {
+    setIsLoading(true);
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setIsAuthenticated(false);
+      toast({
+        title: "Logged Out",
+        description: "You have been successfully logged out",
+      });
+      navigate("/");
+    } catch (error: any) {
+      toast({
+        title: "Logout Failed",
+        description: error.message || "An error occurred during logout",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
