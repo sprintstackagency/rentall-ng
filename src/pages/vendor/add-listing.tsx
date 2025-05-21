@@ -12,7 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useMockData } from "@/context/MockDataContext";
 import { useAuth } from "@/context/AuthContext";
-import { Upload, Plus, Minus, Trash } from "lucide-react";
+import { Plus, Minus } from "lucide-react";
+import { ImageUpload } from "@/components/image-upload";
+import { itemsService } from "@/services/api";
 
 export function AddListingPage() {
   const { categories } = useMockData();
@@ -46,28 +48,14 @@ export function AddListingPage() {
     }));
   };
   
-  const handleImageUpload = () => {
-    // In a real app, this would upload the image to storage
-    // For demo purposes, we'll just add a placeholder image URL
+  const handleImagesChange = (images: string[]) => {
     setFormData((prev) => ({
       ...prev,
-      images: [...prev.images, `https://source.unsplash.com/random/800x600?equipment&sig=${Date.now()}`],
-    }));
-    
-    toast({
-      title: "Image uploaded",
-      description: "Your image has been uploaded successfully.",
-    });
-  };
-  
-  const removeImage = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index),
+      images: images,
     }));
   };
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     
@@ -81,16 +69,57 @@ export function AddListingPage() {
       setIsSubmitting(false);
       return;
     }
+
+    if (!user?.id) {
+      toast({
+        title: "Authentication required",
+        description: "You must be logged in to create a listing.",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
+      return;
+    }
     
-    // In a real app, this would submit the data to the server
-    setTimeout(() => {
+    try {
+      // Create the listing in the database
+      await itemsService.create({
+        title: formData.title,
+        description: formData.description,
+        price: Number(formData.price),
+        quantity: Number(formData.quantity),
+        category: formData.category,
+        images: formData.images,
+        vendorId: user.id,
+      });
+      
       toast({
         title: "Listing created",
         description: "Your equipment has been listed successfully.",
       });
+      
+      navigate("/vendor/manage-listings");
+    } catch (error: any) {
+      console.error("Error creating listing:", error);
+      toast({
+        title: "Listing failed",
+        description: error.message || "There was an error creating your listing. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
       setIsSubmitting(false);
-      navigate("/vendor");
-    }, 1500);
+    }
+  };
+  
+  // Format price in Naira
+  const formatPrice = (price: string) => {
+    if (!price) return "";
+    
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: 'NGN',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(Number(price));
   };
   
   return (
@@ -156,6 +185,11 @@ export function AddListingPage() {
                       onChange={handleChange}
                       required
                     />
+                    {formData.price && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {formatPrice(formData.price)} per day
+                      </p>
+                    )}
                   </div>
                   
                   <div className="space-y-2">
@@ -230,43 +264,17 @@ export function AddListingPage() {
                   </div>
                 </div>
                 
-                <div className="space-y-3">
-                  <Label>Images</Label>
-                  
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-2">
-                    {formData.images.map((img, index) => (
-                      <div key={index} className="relative group">
-                        <img
-                          src={img}
-                          alt={`Product ${index + 1}`}
-                          className="h-24 w-full object-cover rounded-md border"
-                        />
-                        <button
-                          type="button"
-                          className="absolute top-2 right-2 bg-background/80 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => removeImage(index)}
-                        >
-                          <Trash className="h-4 w-4 text-destructive" />
-                        </button>
-                      </div>
-                    ))}
-                    
-                    <button
-                      type="button"
-                      onClick={handleImageUpload}
-                      className="h-24 rounded-md border-2 border-dashed flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground hover:border-brand transition-colors"
-                    >
-                      <Upload className="h-5 w-5" />
-                      <span className="text-xs">Add Image</span>
-                    </button>
-                  </div>
-                </div>
+                <ImageUpload
+                  images={formData.images}
+                  onChange={handleImagesChange}
+                  maxImages={5}
+                />
                 
                 <div className="pt-4 border-t flex justify-end gap-4">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => navigate("/vendor")}
+                    onClick={() => navigate("/vendor/manage-listings")}
                   >
                     Cancel
                   </Button>

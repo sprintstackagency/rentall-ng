@@ -1,7 +1,6 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,17 +9,31 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Pencil, User, Phone, Mail, MapPin, Shield } from "lucide-react";
+import { usersService } from "@/services/api";
 
 export function ProfilePage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || "",
     email: user?.email || "",
     phone: user?.phone || "",
     address: user?.address || "",
   });
+
+  // Update form data when user data changes
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name || "",
+        email: user.email || "",
+        phone: user.phone || "",
+        address: user.address || "",
+      });
+    }
+  }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -30,19 +43,45 @@ export function ProfilePage() {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this would update the user profile in the database
-    toast({
-      title: "Profile updated",
-      description: "Your profile information has been updated successfully.",
-    });
-    setIsEditing(false);
+    
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to update your profile.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      
+      await usersService.updateProfile(user.id, {
+        name: formData.name,
+        phone: formData.phone,
+        address: formData.address,
+      });
+      
+      toast({
+        title: "Profile updated",
+        description: "Your profile information has been updated successfully.",
+      });
+      setIsEditing(false);
+    } catch (error: any) {
+      toast({
+        title: "Update failed",
+        description: error.message || "Failed to update profile. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar />
       <main className="flex-1 py-10">
         <div className="container max-w-4xl">
           <div className="mb-8">
@@ -69,6 +108,7 @@ export function ProfilePage() {
                       variant="outline" 
                       size="sm" 
                       onClick={() => setIsEditing(!isEditing)}
+                      disabled={isLoading}
                     >
                       {isEditing ? "Cancel" : <><Pencil className="h-4 w-4 mr-2" /> Edit</>}
                     </Button>
@@ -103,6 +143,7 @@ export function ProfilePage() {
                               name="name" 
                               value={formData.name} 
                               onChange={handleChange} 
+                              disabled={isLoading}
                             />
                           ) : (
                             <div className="flex items-center h-10 px-3 rounded-md border bg-background">
@@ -114,20 +155,10 @@ export function ProfilePage() {
                         
                         <div className="space-y-2">
                           <Label htmlFor="email">Email Address</Label>
-                          {isEditing ? (
-                            <Input 
-                              id="email" 
-                              name="email" 
-                              type="email" 
-                              value={formData.email} 
-                              onChange={handleChange} 
-                            />
-                          ) : (
-                            <div className="flex items-center h-10 px-3 rounded-md border bg-background">
-                              <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
-                              {formData.email || "Not provided"}
-                            </div>
-                          )}
+                          <div className="flex items-center h-10 px-3 rounded-md border bg-background">
+                            <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
+                            {formData.email || "Not provided"}
+                          </div>
                         </div>
                         
                         <div className="space-y-2">
@@ -138,6 +169,7 @@ export function ProfilePage() {
                               name="phone" 
                               value={formData.phone} 
                               onChange={handleChange} 
+                              disabled={isLoading}
                             />
                           ) : (
                             <div className="flex items-center h-10 px-3 rounded-md border bg-background">
@@ -155,6 +187,7 @@ export function ProfilePage() {
                               name="address" 
                               value={formData.address} 
                               onChange={handleChange} 
+                              disabled={isLoading}
                             />
                           ) : (
                             <div className="flex items-center h-10 px-3 rounded-md border bg-background">
@@ -168,8 +201,12 @@ export function ProfilePage() {
 
                     {isEditing && (
                       <div className="mt-6">
-                        <Button type="submit" className="bg-brand hover:bg-brand-dark">
-                          Save Changes
+                        <Button 
+                          type="submit" 
+                          className="bg-brand hover:bg-brand-dark"
+                          disabled={isLoading}
+                        >
+                          {isLoading ? "Saving..." : "Save Changes"}
                         </Button>
                       </div>
                     )}

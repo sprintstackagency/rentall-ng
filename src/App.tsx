@@ -17,8 +17,11 @@ import ListingsPage from "./pages/listings/listings-page";
 import ItemDetail from "./pages/listings/item-detail";
 import ProfilePage from "./pages/profile/profile-page";
 import AddListingPage from "./pages/vendor/add-listing";
+import ManageListingsPage from "./pages/vendor/manage-listings";
 import { DashboardLayout } from "./pages/dashboard/dashboard-layout";
 import NotFound from "./pages/NotFound";
+import { HowItWorksPage } from "./pages/info/how-it-works";
+import { AboutPage } from "./pages/info/about";
 
 const queryClient = new QueryClient();
 
@@ -45,9 +48,14 @@ const App = () => (
               
               {/* Vendor routes */}
               <Route path="/vendor/add-listing" element={<DashboardLayout allowedRoles={["vendor", "admin"]}><AddListingPage /></DashboardLayout>} />
+              <Route path="/vendor/manage-listings" element={<DashboardLayout allowedRoles={["vendor", "admin"]}><ManageListingsPage /></DashboardLayout>} />
               
               {/* Profile */}
               <Route path="/profile" element={<DashboardLayout><ProfilePage /></DashboardLayout>} />
+              
+              {/* Info pages */}
+              <Route path="/how-it-works" element={<HowItWorksPage />} />
+              <Route path="/about" element={<AboutPage />} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>
@@ -59,4 +67,3 @@ const App = () => (
 );
 
 export default App;
-

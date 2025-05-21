@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { useMockData } from "@/context/MockDataContext";
@@ -15,7 +15,11 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { CategoryCard } from "@/components/category-card";
-import { Search, Filter } from "lucide-react";
+import { Search, Filter, Loader } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Item } from "@/types";
+import { itemsService } from "@/services/api";
+import { useToast } from "@/hooks/use-toast";
 
 interface ListingFilters {
   search: string;
@@ -26,15 +30,56 @@ interface ListingFilters {
 }
 
 export function ListingsPage() {
-  const { items, categories } = useMockData();
+  const { categories } = useMockData();
+  const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [items, setItems] = useState<Item[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
   const [filters, setFilters] = useState<ListingFilters>({
-    search: "",
-    category: "",
-    minPrice: 0,
-    maxPrice: 500,
-    sortBy: "newest",
+    search: searchParams.get("search") || "",
+    category: searchParams.get("category") || "",
+    minPrice: Number(searchParams.get("minPrice")) || 0,
+    maxPrice: Number(searchParams.get("maxPrice")) || 50000,
+    sortBy: searchParams.get("sortBy") || "newest",
   });
-  const [showFilters, setShowFilters] = useState(false);
+  
+  const [showFilters, setShowFilters] = useState(!!searchParams.get("category"));
+  
+  // Fetch items from the API
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        setIsLoading(true);
+        const fetchedItems = await itemsService.getAll();
+        setItems(fetchedItems);
+      } catch (error) {
+        console.error("Error fetching items:", error);
+        toast({
+          title: "Failed to load listings",
+          description: "Please try again later",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchItems();
+  }, []);
+  
+  // Update URL when filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    
+    if (filters.search) params.set("search", filters.search);
+    if (filters.category) params.set("category", filters.category);
+    if (filters.minPrice > 0) params.set("minPrice", filters.minPrice.toString());
+    if (filters.maxPrice < 50000) params.set("maxPrice", filters.maxPrice.toString());
+    if (filters.sortBy !== "newest") params.set("sortBy", filters.sortBy);
+    
+    setSearchParams(params);
+  }, [filters, setSearchParams]);
   
   const toggleFilters = () => {
     setShowFilters(!showFilters);
@@ -52,7 +97,7 @@ export function ListingsPage() {
       search: "",
       category: "",
       minPrice: 0,
-      maxPrice: 500,
+      maxPrice: 50000,
       sortBy: "newest",
     });
   };
@@ -81,6 +126,16 @@ export function ListingsPage() {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     }
   });
+
+  // Format price in Naira
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: 'NGN',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(price);
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -138,7 +193,7 @@ export function ListingsPage() {
                         <SelectValue placeholder="All Categories" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all-categories">All Categories</SelectItem>
+                        <SelectItem value="">All Categories</SelectItem>
                         {categories.map((category) => (
                           <SelectItem key={category.id} value={category.id}>
                             {category.name}
@@ -152,14 +207,14 @@ export function ListingsPage() {
                     <div className="mb-1">
                       <label className="text-sm font-medium block">Price Range</label>
                       <div className="text-xs text-muted-foreground flex justify-between">
-                        <span>${filters.minPrice}</span>
-                        <span>${filters.maxPrice}</span>
+                        <span>{formatPrice(filters.minPrice)}</span>
+                        <span>{formatPrice(filters.maxPrice)}</span>
                       </div>
                     </div>
                     <Slider
                       min={0}
-                      max={500}
-                      step={10}
+                      max={50000}
+                      step={1000}
                       value={[filters.minPrice, filters.maxPrice]}
                       onValueChange={(values) => {
                         handleFilterChange("minPrice", values[0]);
@@ -185,7 +240,18 @@ export function ListingsPage() {
           <h2 className="text-xl font-semibold mb-4">Categories</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-4">
             {categories.map((category) => (
-              <CategoryCard key={category.id} category={category} />
+              <CategoryCard 
+                key={category.id} 
+                category={category} 
+                active={filters.category === category.id}
+                onClick={() => {
+                  if (filters.category === category.id) {
+                    handleFilterChange("category", "");
+                  } else {
+                    handleFilterChange("category", category.id);
+                  }
+                }}
+              />
             ))}
           </div>
         </div>
@@ -195,11 +261,35 @@ export function ListingsPage() {
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold">Available Equipment</h2>
             <p className="text-sm text-muted-foreground">
-              {sortedItems.length} item{sortedItems.length !== 1 ? 's' : ''} found
+              {isLoading ? (
+                <span className="flex items-center">
+                  <Loader className="h-3 w-3 mr-2 animate-spin" />
+                  Loading...
+                </span>
+              ) : (
+                `${sortedItems.length} item${sortedItems.length !== 1 ? 's' : ''} found`
+              )}
             </p>
           </div>
           
-          {sortedItems.length > 0 ? (
+          {isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {[...Array(8)].map((_, index) => (
+                <Card key={index} className="overflow-hidden card-hover-effect animate-pulse">
+                  <div className="aspect-square bg-muted"></div>
+                  <CardContent className="p-4">
+                    <div className="h-6 bg-muted rounded w-3/4 mb-2"></div>
+                    <div className="h-4 bg-muted rounded w-full mb-1"></div>
+                    <div className="h-4 bg-muted rounded w-2/3"></div>
+                  </CardContent>
+                  <CardFooter className="p-4 pt-0 flex justify-between">
+                    <div className="h-6 bg-muted rounded w-1/3"></div>
+                    <div className="h-8 bg-muted rounded w-1/4"></div>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          ) : sortedItems.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {sortedItems.map((item) => (
                 <ItemCard key={item.id} item={item} />

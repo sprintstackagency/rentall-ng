@@ -6,13 +6,17 @@ import { Link } from "react-router-dom";
 
 interface CategoryCardProps {
   category: Category;
+  active?: boolean;
+  onClick?: () => void;
 }
 
-export function CategoryCard({ category }: CategoryCardProps) {
+export function CategoryCard({ category, active = false, onClick }: CategoryCardProps) {
   // Mock icon mapping - in a real app, we'd have proper icons
   const getIconComponent = () => {
     return (
-      <div className="w-12 h-12 flex items-center justify-center rounded-full bg-brand-light text-brand">
+      <div className={`w-12 h-12 flex items-center justify-center rounded-full ${
+        active ? "bg-brand text-white" : "bg-brand-light text-brand"
+      }`}>
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="24"
@@ -32,6 +36,24 @@ export function CategoryCard({ category }: CategoryCardProps) {
       </div>
     );
   };
+
+  if (onClick) {
+    return (
+      <Card 
+        className={`card-hover-effect h-full animate-fade-in cursor-pointer ${
+          active ? "border-brand bg-brand-light/10" : ""
+        }`}
+        onClick={onClick}
+      >
+        <CardContent className="p-6 flex flex-col items-center text-center">
+          {getIconComponent()}
+          <h3 className={`font-medium mt-4 ${active ? "text-brand" : ""}`}>
+            {category.name}
+          </h3>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Link to={`/listings?category=${category.id}`}>
