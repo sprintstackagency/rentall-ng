@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
@@ -20,6 +19,11 @@ import { useSearchParams } from "react-router-dom";
 import { Item } from "@/types";
 import { itemsService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Card,
+  CardContent,
+  CardFooter
+} from "@/components/ui/card";
 
 interface ListingFilters {
   search: string;
