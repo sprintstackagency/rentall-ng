@@ -27,11 +27,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         console.log("Auth state changed:", event);
         if (session && session.user) {
           // Get user profile with role information
-          fetchUserProfile(session.user.id);
+          await fetchUserProfile(session.user.id);
         } else {
           setUser(null);
           setIsAuthenticated(false);
@@ -100,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error("Error fetching user profile:", error.message);
       // If we can't get the profile, sign out for safety
-      supabase.auth.signOut();
+      await supabase.auth.signOut();
       setUser(null);
       setIsAuthenticated(false);
     } finally {
@@ -172,7 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       
       // If we can't create the profile, sign out for safety
-      supabase.auth.signOut();
+      await supabase.auth.signOut();
       setUser(null);
       setIsAuthenticated(false);
     }
@@ -190,7 +190,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw error ?? new Error("No user session returned");
       }
   
-      await fetchUserProfile(data.session.user.id); // Ensure user state is set
+      // Check if user has a profile
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", data.session.user.id)
+        .single();
+      
+      // If no profile exists, create one
+      if (profileError && profileError.code === 'PGRST116') {
+        await createUserProfile(data.session.user.id);
+      } else {
+        await fetchUserProfile(data.session.user.id); // Ensure user state is set
+      }
   
       toast({
         title: "Login Successful",
@@ -301,14 +313,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout
       }}
     >
-            {children}
+      {children}
     </AuthContext.Provider>
   );
 };
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
