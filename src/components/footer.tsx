@@ -96,7 +96,7 @@ export function Footer() {
         
         <div className="border-t mt-8 pt-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} RentGear. All rights reserved.
+            © {new Date().getFullYear()} RentAll.ng. All rights reserved.
           </p>
           <div className="flex items-center gap-4">
             <Link to="#" className="text-muted-foreground hover:text-foreground transition-colors">

@@ -2,14 +2,25 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
+
+export interface PaymentData {
+  authorization_url: string;
+  reference: string;
+}
 
 export function usePayments() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const initializePayment = async (rentalId: string) => {
     setIsLoading(true);
     try {
+      if (!user) {
+        throw new Error("You must be logged in to make a payment");
+      }
+
       const { data, error } = await supabase.functions.invoke('initialize-payment', {
         body: { rentalId },
       });

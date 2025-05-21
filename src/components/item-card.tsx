@@ -4,22 +4,13 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Item } from "@/types";
 import { Link } from "react-router-dom";
+import { formatNairaPrice } from "@/utils/price-formatter";
 
 interface ItemCardProps {
   item: Item;
 }
 
 export function ItemCard({ item }: ItemCardProps) {
-  // Format price in Naira
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-NG', {
-      style: 'currency',
-      currency: 'NGN',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(price);
-  };
-
   return (
     <Card className="overflow-hidden card-hover-effect animate-fade-in">
       <Link to={`/listings/${item.id}`} className="block">
@@ -49,7 +40,7 @@ export function ItemCard({ item }: ItemCardProps) {
       </CardContent>
       <CardFooter className="p-4 pt-0 flex justify-between">
         <div>
-          <p className="text-lg font-bold">{formatPrice(item.price)}/day</p>
+          <p className="text-lg font-bold">{formatNairaPrice(item.price)}/day</p>
           <p className="text-xs text-muted-foreground">{item.quantity} available</p>
         </div>
         <Button asChild size="sm" className="bg-brand hover:bg-brand-dark button-hover-effect">

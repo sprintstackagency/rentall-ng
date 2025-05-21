@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Trash, Image as ImageIcon } from "lucide-react";
+import { Upload, Trash, Image as ImageIcon, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface ImageUploadProps {
@@ -24,6 +24,7 @@ export function ImageUpload({
 }: ImageUploadProps) {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -40,7 +41,10 @@ export function ImageUpload({
     }
 
     setIsUploading(true);
+    setUploadProgress(0);
     const newImages: string[] = [...images];
+    const totalFiles = files.length;
+    let completedFiles = 0;
 
     try {
       for (let i = 0; i < files.length; i++) {
@@ -49,30 +53,30 @@ export function ImageUpload({
         const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
         const filePath = `${folderPath}/${fileName}`;
 
-        // For demo purposes, we'll just use a random unsplash image instead of actually uploading
-        // In a real app, you would uncomment this and use the Supabase storage
-        
-        // const { error: uploadError } = await supabase.storage
-        //   .from(bucketName)
-        //   .upload(filePath, file);
+        // Upload to Supabase Storage
+        const { data, error } = await supabase.storage
+          .from(bucketName)
+          .upload(filePath, file);
 
-        // if (uploadError) {
-        //   throw uploadError;
-        // }
+        if (error) {
+          throw error;
+        }
 
-        // const { data } = supabase.storage
-        //   .from(bucketName)
-        //   .getPublicUrl(filePath);
+        completedFiles++;
+        setUploadProgress(Math.round((completedFiles / totalFiles) * 100));
 
-        // Mock a public URL with unsplash
-        const mockPublicUrl = `https://source.unsplash.com/random/800x600?equipment&sig=${Date.now() + i}`;
-        newImages.push(mockPublicUrl);
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from(bucketName)
+          .getPublicUrl(filePath);
+
+        newImages.push(urlData.publicUrl);
       }
 
       onChange(newImages);
       toast({
-        title: "Images uploaded",
-        description: "Your images have been uploaded successfully",
+        title: "Upload successful",
+        description: `Successfully uploaded ${files.length} image${files.length > 1 ? 's' : ''}`,
       });
     } catch (error: any) {
       console.error("Error uploading image:", error);
@@ -83,6 +87,7 @@ export function ImageUpload({
       });
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
       // Reset the input value so the same file can be selected again
       e.target.value = "";
     }
@@ -122,7 +127,10 @@ export function ImageUpload({
               className="h-full rounded-md border-2 border-dashed flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground hover:border-brand transition-colors cursor-pointer"
             >
               {isUploading ? (
-                <div className="animate-pulse">Uploading...</div>
+                <div className="flex flex-col items-center">
+                  <Loader2 className="h-6 w-6 animate-spin mb-2" />
+                  <span className="text-xs">{uploadProgress}%</span>
+                </div>
               ) : (
                 <>
                   <Upload className="h-6 w-6" />

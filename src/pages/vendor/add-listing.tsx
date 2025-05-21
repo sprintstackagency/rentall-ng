@@ -14,7 +14,8 @@ import { useMockData } from "@/context/MockDataContext";
 import { useAuth } from "@/context/AuthContext";
 import { Plus, Minus } from "lucide-react";
 import { ImageUpload } from "@/components/image-upload";
-import { itemsService } from "@/services/api";
+import { supabase } from "@/integrations/supabase/client";
+import { formatNairaPrice, formatNairaFull } from "@/utils/price-formatter";
 
 export function AddListingPage() {
   const { categories } = useMockData();
@@ -82,15 +83,23 @@ export function AddListingPage() {
     
     try {
       // Create the listing in the database
-      await itemsService.create({
-        title: formData.title,
-        description: formData.description,
-        price: Number(formData.price),
-        quantity: Number(formData.quantity),
-        category: formData.category,
-        images: formData.images,
-        vendorId: user.id,
-      });
+      const { data, error } = await supabase
+        .from("items")
+        .insert({
+          title: formData.title,
+          description: formData.description,
+          price: Number(formData.price),
+          quantity: Number(formData.quantity),
+          category: formData.category,
+          images: formData.images,
+          vendor_id: user.id,
+        })
+        .select();
+      
+      if (error) {
+        console.error("Error creating listing:", error);
+        throw new Error(error.message);
+      }
       
       toast({
         title: "Listing created",
@@ -108,18 +117,6 @@ export function AddListingPage() {
     } finally {
       setIsSubmitting(false);
     }
-  };
-  
-  // Format price in Naira
-  const formatPrice = (price: string) => {
-    if (!price) return "";
-    
-    return new Intl.NumberFormat('en-NG', {
-      style: 'currency',
-      currency: 'NGN',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(Number(price));
   };
   
   return (
@@ -187,7 +184,7 @@ export function AddListingPage() {
                     />
                     {formData.price && (
                       <p className="text-sm text-muted-foreground mt-1">
-                        {formatPrice(formData.price)} per day
+                        {formatNairaFull(formData.price)} per day
                       </p>
                     )}
                   </div>
