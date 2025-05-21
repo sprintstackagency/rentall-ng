@@ -73,6 +73,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (error) {
+        // If no profile found, attempt to create one
+        if (error.code === 'PGRST116') {
+          console.log("No profile found, creating one...");
+          return await createUserProfile(userId);
+        }
         throw error;
       }
 
@@ -100,6 +105,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsAuthenticated(false);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Create a user profile if one doesn't exist
+  const createUserProfile = async (userId: string) => {
+    try {
+      // First get user data from auth
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      if (!authUser) {
+        throw new Error("Authentication user not found");
+      }
+      
+      // Get email and metadata
+      const email = authUser.email || "";
+      const name = authUser.user_metadata?.name || email.split('@')[0];
+      const role: UserRole = (authUser.user_metadata?.role as UserRole) || "renter";
+      
+      // Create new profile
+      const { data: newProfile, error } = await supabase
+        .from("profiles")
+        .insert({
+          id: userId,
+          email: email,
+          name: name,
+          role: role,
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        throw error;
+      }
+      
+      if (newProfile) {
+        // Map Supabase profile to our User type
+        const userData: User = {
+          id: newProfile.id,
+          email: newProfile.email,
+          name: newProfile.name,
+          role: newProfile.role as UserRole,
+          phone: newProfile.phone || undefined,
+          address: newProfile.address || undefined,
+          createdAt: newProfile.created_at,
+        };
+
+        setUser(userData);
+        setIsAuthenticated(true);
+        console.log("New user profile created:", userData);
+        
+        // Show toast notification
+        toast({
+          title: "Profile Created",
+          description: "Your profile has been created successfully.",
+        });
+        
+        return userData;
+      }
+    } catch (error: any) {
+      console.error("Error creating user profile:", error.message);
+      toast({
+        title: "Profile Creation Failed",
+        description: error.message || "Failed to create user profile",
+        variant: "destructive",
+      });
+      
+      // If we can't create the profile, sign out for safety
+      supabase.auth.signOut();
+      setUser(null);
+      setIsAuthenticated(false);
     }
   };
 
@@ -133,7 +208,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
     }
   };
-  
 
   const signup = async (email: string, password: string, name: string, role: UserRole) => {
     setIsLoading(true);
@@ -239,4 +313,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
