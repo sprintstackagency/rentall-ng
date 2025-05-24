@@ -33,6 +33,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data } = supabase.auth.onAuthStateChange(
         async (event, session) => {
           console.log("Auth state changed:", event, !!session);
+          console.log("Session:", session);
+          console.log("User:", session?.user);
           
           if (session?.user) {
             console.log("Session found, fetching user profile");
@@ -114,15 +116,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
     
     try {
+      console.log("Starting profile fetch from database...");
       const profilePromise = supabase
         .from("profiles")
         .select("*")
         .eq("id", userId)
         .single();
 
-      const { data: profile, error } = await Promise.race([profilePromise, timeoutPromise]) as any;
+      console.log("Awaiting profile response...");
+      const response = await Promise.race([profilePromise, timeoutPromise]);
+      console.log("Raw profile response:", response);
+
+      const { data: profile, error } = response as any;
 
       if (error) {
+        console.error("Profile fetch error details:", {
+          code: error.code,
+          message: error.message,
+          details: error.details
+        });
+        
         if (error.code === 'PGRST116') {
           console.log("No profile found, creating one...");
           return await createUserProfile(userId);
