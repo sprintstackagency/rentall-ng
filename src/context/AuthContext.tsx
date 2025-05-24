@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useContext, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { User, UserRole } from "@/types";
@@ -41,10 +40,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               await fetchUserProfile(session.user.id);
             } catch (error) {
               console.error("Failed to fetch user profile:", error);
-              // If profile fetching fails, still set basic auth state
-              setUser(null);
-              setIsAuthenticated(false);
-              setIsLoading(false);
+              // If profile fetching fails, sign out the user
+              await handleProfileFetchFailure();
             }
           } else {
             console.log("No session, clearing user state");
@@ -87,6 +84,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
   }, []);
+
+  // Handle profile fetch failure by logging out the user
+  const handleProfileFetchFailure = async () => {
+    console.log("Profile fetch failed, logging out user");
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setIsAuthenticated(false);
+      toast({
+        title: "Session Error",
+        description: "There was an issue with your session. Please log in again.",
+        variant: "destructive",
+      });
+    } catch (error) {
+      console.error("Error during logout:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Fetch user profile with proper error handling and timeout
   const fetchUserProfile = async (userId: string) => {
@@ -133,19 +149,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error("Error fetching user profile:", error.message);
       
-      // Don't sign out immediately - try to create profile first
-      if (error.message === "Profile fetch timeout" || error.code === 'PGRST116') {
-        console.log("Attempting to create profile due to error:", error.message);
+      // If it's a timeout or any other error (not missing profile), throw to trigger logout
+      if (error.message !== "Profile fetch timeout" && error.code !== 'PGRST116') {
+        throw error;
+      }
+      
+      // For timeout errors, throw to trigger logout
+      if (error.message === "Profile fetch timeout") {
+        throw new Error("Profile fetch timed out");
+      }
+      
+      // Only try to create profile if it doesn't exist (PGRST116)
+      if (error.code === 'PGRST116') {
+        console.log("Attempting to create profile due to missing profile");
         await createUserProfile(userId);
       } else {
-        // For other errors, clear auth state but don't sign out
-        setUser(null);
-        setIsAuthenticated(false);
-        toast({
-          title: "Profile Error",
-          description: "There was an issue loading your profile. Please try refreshing the page.",
-          variant: "destructive",
-        });
+        throw error;
       }
     } finally {
       setIsLoading(false);
@@ -206,34 +225,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error: any) {
       console.error("Error creating user profile:", error.message);
-      
-      // If profile creation fails, still try to set basic auth state
-      try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser) {
-          const basicUser: User = {
-            id: authUser.id,
-            email: authUser.email || "",
-            name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || "User",
-            role: "renter",
-            createdAt: new Date().toISOString(),
-          };
-          
-          setUser(basicUser);
-          setIsAuthenticated(true);
-          console.log("Set basic user data due to profile creation failure");
-        }
-      } catch (basicError) {
-        console.error("Failed to set basic user data:", basicError);
-        setUser(null);
-        setIsAuthenticated(false);
-      }
-      
-      toast({
-        title: "Profile Setup Issue",
-        description: "There was an issue setting up your profile, but you can still use the app.",
-        variant: "destructive",
-      });
+      throw error; // Throw to trigger logout in fetchUserProfile
     } finally {
       setIsLoading(false);
     }

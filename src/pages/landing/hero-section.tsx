@@ -53,12 +53,14 @@ export function HeroSection() {
         <div className="flex-1 flex justify-center animate-fade-in">
           <div className="aspect-video max-w-lg w-full bg-muted rounded-lg shadow-lg overflow-hidden relative">
             <img 
-              src="/placeholder.svg" 
-              alt="Event Equipment" 
+              src="https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2340&q=80" 
+              alt="Professional Event Equipment - Sound systems, lighting, and more for rent" 
               className="w-full h-full object-cover" 
             />
             <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-              <div className="text-white font-bold text-sm md:text-xl">Demo Image: Event Equipment</div>
+              <div className="text-white font-bold text-sm md:text-xl text-center px-4">
+                Professional Event Equipment Ready to Rent
+              </div>
             </div>
           </div>
         </div>
