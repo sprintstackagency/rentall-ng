@@ -1,46 +1,95 @@
 
-import React from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/context/AuthContext";
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Loader } from "lucide-react";
 import { UserRole } from "@/types";
 
 export function SignupForm() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("renter");
-  const [passwordError, setPasswordError] = useState("");
-  
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    role: "renter" as UserRole,
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [localLoading, setLocalLoading] = useState(false);
   const { signup, isLoading } = useAuth();
-  const navigate = useNavigate();
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ""
+      }));
+    }
+  };
+
+  const handleRoleChange = (value: UserRole) => {
+    setFormData(prev => ({
+      ...prev,
+      role: value
+    }));
+  };
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = "Name is required";
+    }
+    
+    if (!formData.email.trim()) {
+      newErrors.email = "Email is required";
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = "Please enter a valid email";
+    }
+    
+    if (!formData.password) {
+      newErrors.password = "Password is required";
+    } else if (formData.password.length < 6) {
+      newErrors.password = "Password must be at least 6 characters";
+    }
+    
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = "Please confirm your password";
+    } else if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = "Passwords do not match";
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setPasswordError("");
     
-    if (!name || !email || !password || !confirmPassword) {
+    if (!validateForm()) {
       return;
     }
     
-    if (password !== confirmPassword) {
-      setPasswordError("Passwords do not match");
-      return;
-    }
-    
+    setLocalLoading(true);
     try {
-      await signup(email, password, name, role);
-      // Navigation is handled in the signup function
+      await signup(formData.email, formData.password, formData.name, formData.role);
     } catch (error) {
-      console.error("Signup error:", error);
+      console.error("Signup form error:", error);
+    } finally {
+      setLocalLoading(false);
     }
   };
+
+  const isFormLoading = localLoading || isLoading;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 pt-4">
@@ -48,56 +97,72 @@ export function SignupForm() {
         <Label htmlFor="name">Full Name</Label>
         <Input 
           id="name" 
+          name="name"
           placeholder="John Doe" 
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          value={formData.name}
+          onChange={handleInputChange}
+          disabled={isFormLoading}
           required
+          autoComplete="name"
         />
+        {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
       </div>
       
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
         <Input 
           id="email" 
+          name="email"
           type="email" 
           placeholder="your@email.com" 
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          value={formData.email}
+          onChange={handleInputChange}
+          disabled={isFormLoading}
           required
+          autoComplete="email"
         />
+        {errors.email && <p className="text-destructive text-xs">{errors.email}</p>}
       </div>
       
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
         <Input 
           id="password" 
+          name="password"
           type="password" 
           placeholder="••••••••" 
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          value={formData.password}
+          onChange={handleInputChange}
+          disabled={isFormLoading}
           required
+          autoComplete="new-password"
         />
+        {errors.password && <p className="text-destructive text-xs">{errors.password}</p>}
       </div>
       
       <div className="space-y-2">
         <Label htmlFor="confirmPassword">Confirm Password</Label>
         <Input 
           id="confirmPassword" 
+          name="confirmPassword"
           type="password" 
           placeholder="••••••••" 
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
+          value={formData.confirmPassword}
+          onChange={handleInputChange}
+          disabled={isFormLoading}
           required
+          autoComplete="new-password"
         />
-        {passwordError && <p className="text-destructive text-xs mt-1">{passwordError}</p>}
+        {errors.confirmPassword && <p className="text-destructive text-xs">{errors.confirmPassword}</p>}
       </div>
       
       <div className="space-y-3">
         <Label>I want to</Label>
         <RadioGroup 
-          value={role} 
-          onValueChange={(value: UserRole) => setRole(value)}
+          value={formData.role} 
+          onValueChange={handleRoleChange}
           className="flex flex-col space-y-1"
+          disabled={isFormLoading}
         >
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="renter" id="renter" />
@@ -110,25 +175,37 @@ export function SignupForm() {
         </RadioGroup>
       </div>
       
-      <Button type="submit" className="w-full bg-brand hover:bg-brand-dark" disabled={isLoading}>
-        {isLoading ? (
+      <Button 
+        type="submit" 
+        className="w-full bg-brand hover:bg-brand-dark" 
+        disabled={isFormLoading}
+      >
+        {isFormLoading ? (
           <>
-            <Loader className="mr-2 h-4 w-4 animate-spin" /> Creating account
+            <Loader className="mr-2 h-4 w-4 animate-spin" /> Creating account...
           </>
         ) : (
-          "Create account"
+          "Create Account"
         )}
       </Button>
       
       <p className="text-xs text-center text-muted-foreground">
         By creating an account, you agree to our{" "}
-        <a href="#" className="text-brand hover:underline">
+        <button 
+          type="button"
+          className="text-brand hover:underline"
+          onClick={() => console.log("Terms clicked")}
+        >
           Terms of Service
-        </a>{" "}
+        </button>{" "}
         and{" "}
-        <a href="#" className="text-brand hover:underline">
+        <button 
+          type="button"
+          className="text-brand hover:underline"
+          onClick={() => console.log("Privacy clicked")}
+        >
           Privacy Policy
-        </a>
+        </button>
         .
       </p>
     </form>

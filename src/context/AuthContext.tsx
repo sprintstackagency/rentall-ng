@@ -27,10 +27,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Profile fetching with comprehensive error handling
+  // Fetch user profile with comprehensive error handling
   const fetchUserProfile = useCallback(async (userId: string): Promise<User | null> => {
     try {
-      console.log("Fetching profile for user:", userId);
+      console.log("🔍 Fetching profile for user:", userId);
       
       const { data: profile, error } = await supabase
         .from("profiles")
@@ -39,15 +39,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (error) {
-        console.error("Profile fetch error:", error);
-        
-        // If profile doesn't exist, create it
-        if (error.code === 'PGRST116') {
-          console.log("Profile not found, creating new profile...");
-          return await createUserProfile(userId);
-        }
-        
-        throw error;
+        console.error("❌ Profile fetch error:", error);
+        throw new Error(`Failed to fetch profile: ${error.message}`);
       }
 
       if (!profile) {
@@ -65,26 +58,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         avatar: profile.avatar || undefined,
       };
 
-      console.log("Profile fetched successfully:", userData.name);
+      console.log("✅ Profile fetched successfully:", userData.name);
       return userData;
     } catch (error: any) {
-      console.error("Failed to fetch user profile:", error.message);
+      console.error("❌ Failed to fetch user profile:", error.message);
       throw error;
     }
   }, []);
 
   // Create user profile if it doesn't exist
-  const createUserProfile = useCallback(async (userId: string): Promise<User> => {
+  const createUserProfile = useCallback(async (authUser: any): Promise<User> => {
     try {
-      console.log("Creating profile for user:", userId);
+      console.log("🔨 Creating profile for user:", authUser.id);
       
-      // Get the current auth user for metadata
-      const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError || !authUser) {
-        throw new Error("Could not get authenticated user data");
-      }
-
       const email = authUser.email || "";
       const name = authUser.user_metadata?.name || email.split('@')[0];
       const role: UserRole = (authUser.user_metadata?.role as UserRole) || "renter";
@@ -92,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data: newProfile, error: insertError } = await supabase
         .from("profiles")
         .insert({
-          id: userId,
+          id: authUser.id,
           email: email,
           name: name,
           role: role,
@@ -101,8 +87,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (insertError) {
-        console.error("Profile creation error:", insertError);
-        throw insertError;
+        console.error("❌ Profile creation error:", insertError);
+        throw new Error(`Failed to create profile: ${insertError.message}`);
       }
 
       const userData: User = {
@@ -116,105 +102,122 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         avatar: newProfile.avatar || undefined,
       };
 
-      console.log("Profile created successfully:", userData.name);
-      
-      toast({
-        title: "Welcome!",
-        description: "Your profile has been created successfully.",
-      });
-
+      console.log("✅ Profile created successfully:", userData.name);
       return userData;
     } catch (error: any) {
-      console.error("Failed to create user profile:", error.message);
+      console.error("❌ Failed to create user profile:", error.message);
       throw error;
     }
-  }, [toast]);
+  }, []);
 
-  // Handle auth state changes
-  const handleAuthStateChange = useCallback(async (event: string, newSession: Session | null) => {
-    console.log("Auth state changed:", event, !!newSession);
+  // Clear authentication state
+  const clearAuthState = useCallback(() => {
+    console.log("🧹 Clearing auth state");
+    setUser(null);
+    setSession(null);
+    setIsAuthenticated(false);
+  }, []);
+
+  // Handle session changes with robust error handling
+  const handleSession = useCallback(async (newSession: Session | null) => {
+    console.log("🔄 Handling session:", !!newSession);
     
+    if (!newSession?.user) {
+      clearAuthState();
+      setIsLoading(false);
+      return;
+    }
+
     try {
       setSession(newSession);
       
-      if (newSession?.user) {
-        console.log("Session found, fetching profile...");
-        const profile = await fetchUserProfile(newSession.user.id);
-        
-        if (profile) {
-          setUser(profile);
-          setIsAuthenticated(true);
-          console.log("Auth state updated successfully");
-        } else {
-          throw new Error("Failed to load user profile");
-        }
+      // Try to fetch existing profile first
+      let profile: User | null = null;
+      
+      try {
+        profile = await fetchUserProfile(newSession.user.id);
+      } catch (error) {
+        console.log("📝 Profile not found, creating new one...");
+        // If profile doesn't exist, create it
+        profile = await createUserProfile(newSession.user);
+      }
+
+      if (profile) {
+        setUser(profile);
+        setIsAuthenticated(true);
+        console.log("✅ Session handled successfully for:", profile.name);
       } else {
-        console.log("No session, clearing user state");
-        setUser(null);
-        setIsAuthenticated(false);
+        throw new Error("Failed to load or create user profile");
       }
     } catch (error: any) {
-      console.error("Auth state change error:", error.message);
+      console.error("❌ Session handling error:", error.message);
       
-      // On any profile-related error, clear session and logout
+      // Force logout on profile errors
       await supabase.auth.signOut();
-      setUser(null);
-      setSession(null);
-      setIsAuthenticated(false);
+      clearAuthState();
       
       toast({
-        title: "Session Error",
-        description: "There was an issue with your session. Please log in again.",
+        title: "Profile Error",
+        description: "There was an issue loading your profile. Please try logging in again.",
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
-  }, [fetchUserProfile, toast]);
+  }, [fetchUserProfile, createUserProfile, clearAuthState, toast]);
 
-  // Initialize auth on mount
+  // Initialize authentication
   useEffect(() => {
-    console.log("Initializing auth system...");
-    
+    console.log("🚀 Initializing authentication...");
     let mounted = true;
-    
-    const initializeAuth = async () => {
+
+    const initAuth = async () => {
       try {
-        // Set up auth state listener first
+        // Set up the auth state listener
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          (event, session) => {
-            if (mounted) {
-              handleAuthStateChange(event, session);
+          async (event, session) => {
+            if (!mounted) return;
+            
+            console.log("🔔 Auth state change:", event);
+            
+            if (event === 'SIGNED_OUT') {
+              clearAuthState();
+              setIsLoading(false);
+            } else {
+              await handleSession(session);
             }
           }
         );
 
-        // Get current session
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        // Get the current session
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
         
-        if (mounted) {
-          await handleAuthStateChange('INITIAL_SESSION', currentSession);
+        if (error) {
+          console.error("❌ Error getting session:", error);
+          clearAuthState();
+        } else if (mounted) {
+          await handleSession(currentSession);
         }
 
         return () => {
-          mounted = false;
           subscription.unsubscribe();
         };
       } catch (error: any) {
-        console.error("Auth initialization error:", error.message);
+        console.error("❌ Auth initialization error:", error.message);
         if (mounted) {
+          clearAuthState();
           setIsLoading(false);
         }
       }
     };
 
-    const cleanup = initializeAuth();
+    const cleanup = initAuth();
     
     return () => {
       mounted = false;
       cleanup.then(fn => fn?.());
     };
-  }, [handleAuthStateChange]);
+  }, [handleSession, clearAuthState]);
 
   // Refresh profile data
   const refreshProfile = useCallback(async () => {
@@ -224,20 +227,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const profile = await fetchUserProfile(session.user.id);
       if (profile) {
         setUser(profile);
+        console.log("✅ Profile refreshed successfully");
       }
     } catch (error: any) {
-      console.error("Profile refresh error:", error.message);
+      console.error("❌ Profile refresh error:", error.message);
+      toast({
+        title: "Refresh Failed",
+        description: "Failed to refresh profile data.",
+        variant: "destructive",
+      });
     }
-  }, [session?.user?.id, fetchUserProfile]);
+  }, [session?.user?.id, fetchUserProfile, toast]);
 
-  // Login function
+  // Login function with improved error handling
   const login = async (email: string, password: string) => {
-    console.log("Login attempt for:", email);
+    console.log("🔑 Attempting login for:", email);
     setIsLoading(true);
     
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
@@ -249,28 +258,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error("No user session returned");
       }
 
-      // Success! The onAuthStateChange will handle the rest
-      console.log("Login successful");
+      console.log("✅ Login successful");
       
       toast({
-        title: "Login Successful",
-        description: "Welcome back to RentAll.ng!",
+        title: "Welcome back!",
+        description: "You have been successfully logged in.",
       });
 
-      // Navigate after a brief delay to allow state to settle
+      // Navigate based on user role after state settles
       setTimeout(() => {
-        navigate("/dashboard");
+        const currentUser = data.session.user;
+        const userRole = currentUser.user_metadata?.role || "renter";
+        
+        if (userRole === "admin") {
+          navigate("/admin");
+        } else if (userRole === "vendor") {
+          navigate("/vendor");
+        } else {
+          navigate("/dashboard");
+        }
       }, 100);
       
     } catch (error: any) {
-      console.error("Login error:", error);
+      console.error("❌ Login error:", error);
       
-      let errorMessage = "Please check your credentials and try again";
+      let errorMessage = "Please check your credentials and try again.";
       
       if (error.message?.includes("Invalid login credentials")) {
         errorMessage = "Invalid email or password. Please try again.";
       } else if (error.message?.includes("Email not confirmed")) {
         errorMessage = "Please check your email and click the confirmation link.";
+      } else if (error.message?.includes("Too many requests")) {
+        errorMessage = "Too many login attempts. Please wait a moment and try again.";
       }
       
       toast({
@@ -283,18 +302,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Signup function
+  // Signup function with improved error handling
   const signup = async (email: string, password: string, name: string, role: UserRole) => {
-    console.log("Signup attempt for:", email);
+    console.log("📝 Attempting signup for:", email);
     setIsLoading(true);
     
     try {
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: email.trim(),
         password,
         options: {
           data: {
-            name,
+            name: name.trim(),
             role,
           },
         },
@@ -308,27 +327,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error("No user data returned");
       }
 
-      console.log("Signup successful");
+      console.log("✅ Signup successful");
       
       toast({
-        title: "Signup Successful",
+        title: "Account Created!",
         description: `Welcome to RentAll.ng, ${name}!`,
       });
 
-      // Navigate after a brief delay
+      // Navigate based on role after state settles
       setTimeout(() => {
-        navigate("/dashboard");
+        if (role === "admin") {
+          navigate("/admin");
+        } else if (role === "vendor") {
+          navigate("/vendor");
+        } else {
+          navigate("/dashboard");
+        }
       }, 100);
       
     } catch (error: any) {
-      console.error("Signup error:", error);
+      console.error("❌ Signup error:", error);
       
-      let errorMessage = "Please check your information and try again";
+      let errorMessage = "Please check your information and try again.";
       
       if (error.message?.includes("User already registered")) {
         errorMessage = "An account with this email already exists. Please try logging in instead.";
       } else if (error.message?.includes("Password should be at least")) {
         errorMessage = "Password should be at least 6 characters long.";
+      } else if (error.message?.includes("Invalid email")) {
+        errorMessage = "Please enter a valid email address.";
       }
       
       toast({
@@ -343,7 +370,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Logout function
   const logout = async () => {
-    console.log("Logging out user");
+    console.log("👋 Logging out user");
     setIsLoading(true);
     
     try {
@@ -353,30 +380,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw error;
       }
 
-      // Clear state immediately
-      setUser(null);
-      setSession(null);
-      setIsAuthenticated(false);
+      clearAuthState();
       
       toast({
         title: "Logged Out",
-        description: "You have been successfully logged out",
+        description: "You have been successfully logged out.",
       });
       
       navigate("/");
     } catch (error: any) {
-      console.error("Logout error:", error);
+      console.error("❌ Logout error:", error);
       
       // Force clear state even if logout fails
-      setUser(null);
-      setSession(null);
-      setIsAuthenticated(false);
+      clearAuthState();
       
       toast({
         title: "Logout Failed",
         description: error.message || "An error occurred during logout",
         variant: "destructive",
       });
+      
+      navigate("/");
     } finally {
       setIsLoading(false);
     }

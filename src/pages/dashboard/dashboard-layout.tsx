@@ -21,15 +21,16 @@ export function DashboardLayout({
   const location = useLocation();
 
   useEffect(() => {
-    // Log auth state for debugging
-    console.log("Dashboard Layout - Auth State:", { 
+    console.log("🔍 Dashboard Layout - State:", { 
       isAuthenticated, 
       isLoading, 
       user: user?.name,
-      role: user?.role 
+      role: user?.role,
+      path: location.pathname 
     });
-  }, [isAuthenticated, isLoading, user]);
+  }, [isAuthenticated, isLoading, user, location.pathname]);
 
+  // Show loading spinner while authentication is being determined
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -41,15 +42,16 @@ export function DashboardLayout({
     );
   }
 
-  // If authentication is required but user is not authenticated, redirect to login
+  // If authentication is required but user is not authenticated
   if (requireAuth && !isAuthenticated) {
-    console.log("Not authenticated, redirecting to login");
+    console.log("❌ Not authenticated, redirecting to login");
     return <Navigate to="/auth/login" state={{ from: location }} replace />;
   }
 
   // If user's role is not allowed for this page
   if (requireAuth && isAuthenticated && user && !allowedRoles.includes(user.role)) {
-    console.log("Role not allowed, redirecting to appropriate dashboard");
+    console.log("❌ Role not allowed, redirecting to appropriate dashboard");
+    
     // Redirect to appropriate dashboard based on role
     if (user.role === "admin") {
       return <Navigate to="/admin" replace />;
