@@ -5,14 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Loader } from "lucide-react";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [localLoading, setLocalLoading] = useState(false);
   const { login, isLoading } = useAuth();
-  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,14 +20,17 @@ export function LoginForm() {
       return;
     }
 
+    setLocalLoading(true);
     try {
       await login(email, password);
-      // Navigation is handled in the login function
     } catch (error) {
       console.error("Login error:", error);
-      // Error handling is done in the login function
+    } finally {
+      setLocalLoading(false);
     }
   };
+
+  const isFormLoading = localLoading || isLoading;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 pt-4">
@@ -40,7 +42,7 @@ export function LoginForm() {
           placeholder="your@email.com" 
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          disabled={isLoading}
+          disabled={isFormLoading}
           required
         />
       </div>
@@ -58,7 +60,7 @@ export function LoginForm() {
           placeholder="••••••••" 
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          disabled={isLoading}
+          disabled={isFormLoading}
           required
         />
       </div>
@@ -66,11 +68,12 @@ export function LoginForm() {
       <Button 
         type="submit" 
         className="w-full bg-brand hover:bg-brand-dark" 
-        disabled={isLoading}
+        disabled={isFormLoading}
       >
-        {isLoading ? (
+        {isFormLoading ? (
           <>
-            <Loader className="mr-2 h-4 w-4 animate-spin" /> Please wait
+            <Loader className="mr-2 h-4 w-4 animate-spin" /> 
+            {localLoading ? "Signing in..." : "Loading..."}
           </>
         ) : (
           "Log in"

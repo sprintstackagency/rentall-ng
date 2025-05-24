@@ -28,7 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log("AuthProvider initializing...");
     let authStateSubscription: { unsubscribe: () => void } | null = null;
 
-    // Set up auth state change listener first
+    // Set up auth state change listener
     const setupAuthListener = () => {
       console.log("Setting up auth state listener");
       const { data } = supabase.auth.onAuthStateChange(
@@ -37,8 +37,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           if (session?.user) {
             console.log("Session found, fetching user profile");
-            // Get user profile with role information
-            await fetchUserProfile(session.user.id);
+            try {
+              await fetchUserProfile(session.user.id);
+            } catch (error) {
+              console.error("Failed to fetch user profile:", error);
+              // If profile fetching fails, still set basic auth state
+              setUser(null);
+              setIsAuthenticated(false);
+              setIsLoading(false);
+            }
           } else {
             console.log("No session, clearing user state");
             setUser(null);
@@ -70,11 +77,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
-    // First set up listener, then check for session
     setupAuthListener();
     checkExistingSession();
 
-    // Cleanup subscription on unmount
     return () => {
       console.log("Cleaning up auth subscription");
       if (authStateSubscription) {
@@ -83,15 +88,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // Fetch user profile with role from the profiles table
+  // Fetch user profile with proper error handling and timeout
   const fetchUserProfile = async (userId: string) => {
     console.log("Fetching user profile for ID:", userId);
+    
+    // Set a timeout to prevent infinite loading
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Profile fetch timeout")), 10000)
+    );
+    
     try {
-      const { data: profile, error } = await supabase
+      const profilePromise = supabase
         .from("profiles")
         .select("*")
         .eq("id", userId)
         .single();
+
+      const { data: profile, error } = await Promise.race([profilePromise, timeoutPromise]) as any;
 
       if (error) {
         if (error.code === 'PGRST116') {
@@ -102,7 +115,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (profile) {
-        // Map Supabase profile to our User type
         const userData: User = {
           id: profile.id,
           email: profile.email,
@@ -111,6 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           phone: profile.phone || undefined,
           address: profile.address || undefined,
           createdAt: profile.created_at,
+          avatar: profile.avatar || undefined,
         };
 
         setUser(userData);
@@ -119,37 +132,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error: any) {
       console.error("Error fetching user profile:", error.message);
-      // If we can't get the profile, sign out for safety
-      await supabase.auth.signOut();
-      setUser(null);
-      setIsAuthenticated(false);
-      toast({
-        title: "Authentication Error",
-        description: "Failed to load your profile. Please log in again.",
-        variant: "destructive",
-      });
+      
+      // Don't sign out immediately - try to create profile first
+      if (error.message === "Profile fetch timeout" || error.code === 'PGRST116') {
+        console.log("Attempting to create profile due to error:", error.message);
+        await createUserProfile(userId);
+      } else {
+        // For other errors, clear auth state but don't sign out
+        setUser(null);
+        setIsAuthenticated(false);
+        toast({
+          title: "Profile Error",
+          description: "There was an issue loading your profile. Please try refreshing the page.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Create a user profile if one doesn't exist
+  // Create a user profile with better error handling
   const createUserProfile = async (userId: string) => {
     console.log("Creating new user profile for ID:", userId);
     try {
-      // First get user data from auth
       const { data: { user: authUser } } = await supabase.auth.getUser();
       
       if (!authUser) {
         throw new Error("Authentication user not found");
       }
       
-      // Get email and metadata
       const email = authUser.email || "";
       const name = authUser.user_metadata?.name || email.split('@')[0];
       const role: UserRole = (authUser.user_metadata?.role as UserRole) || "renter";
       
-      // Create new profile
       const { data: newProfile, error } = await supabase
         .from("profiles")
         .insert({
@@ -166,7 +182,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       if (newProfile) {
-        // Map Supabase profile to our User type
         const userData: User = {
           id: newProfile.id,
           email: newProfile.email,
@@ -175,15 +190,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           phone: newProfile.phone || undefined,
           address: newProfile.address || undefined,
           createdAt: newProfile.created_at,
+          avatar: newProfile.avatar || undefined,
         };
 
         setUser(userData);
         setIsAuthenticated(true);
         console.log("New user profile created:", userData);
         
-        // Show toast notification
         toast({
-          title: "Profile Created",
+          title: "Welcome!",
           description: "Your profile has been created successfully.",
         });
         
@@ -191,16 +206,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error: any) {
       console.error("Error creating user profile:", error.message);
+      
+      // If profile creation fails, still try to set basic auth state
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser) {
+          const basicUser: User = {
+            id: authUser.id,
+            email: authUser.email || "",
+            name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || "User",
+            role: "renter",
+            createdAt: new Date().toISOString(),
+          };
+          
+          setUser(basicUser);
+          setIsAuthenticated(true);
+          console.log("Set basic user data due to profile creation failure");
+        }
+      } catch (basicError) {
+        console.error("Failed to set basic user data:", basicError);
+        setUser(null);
+        setIsAuthenticated(false);
+      }
+      
       toast({
-        title: "Profile Creation Failed",
-        description: error.message || "Failed to create user profile",
+        title: "Profile Setup Issue",
+        description: "There was an issue setting up your profile, but you can still use the app.",
         variant: "destructive",
       });
-      
-      // If we can't create the profile, sign out for safety
-      await supabase.auth.signOut();
-      setUser(null);
-      setIsAuthenticated(false);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -217,20 +252,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw error ?? new Error("No user session returned");
       }
   
-      // Check if user has a profile
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", data.session.user.id)
-        .single();
+      // The onAuthStateChange will handle profile fetching
+      console.log("Login successful, waiting for profile load...");
       
-      // If no profile exists, create one
-      if (profileError && profileError.code === 'PGRST116') {
-        await createUserProfile(data.session.user.id);
-      } else {
-        await fetchUserProfile(data.session.user.id); // Ensure user state is set
-      }
-  
+      // Wait for auth state to update
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       toast({
         title: "Login Successful",
         description: "Welcome back to RentAll.ng!",
@@ -244,6 +271,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: error.message || "Please check your credentials and try again",
         variant: "destructive",
       });
+    } finally {
       setIsLoading(false);
     }
   };
@@ -252,7 +280,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log("Signup attempt for:", email);
     setIsLoading(true);
     try {
-      // Sign up with Supabase and include name and role in metadata
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -263,20 +290,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           },
         },
       });
-      console.log("Sign up result:", data);
-  
+      
       if (error) {
         throw error;
       }
   
-      // Create the profile after successful signup
-      const userId = data.user?.id; // Get the user ID from the signup response
+      const userId = data.user?.id;
       if (userId) {
         const { error: profileError } = await supabase
           .from('profiles')
           .insert([
             {
-              id: userId,  // Use the user ID as the profile ID
+              id: userId,
               email,
               name,
               role,
@@ -284,17 +309,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ]);
   
         if (profileError) {
-          throw profileError; // Handle profile creation error
+          console.warn("Profile creation during signup failed:", profileError);
+          // Don't throw here, let the auth flow handle it
         }
       }
   
       toast({
         title: "Signup Successful",
-        description: `Welcome to RentAll.ng, ${name}! Please check your email for verification.`,
+        description: `Welcome to RentAll.ng, ${name}!`,
       });
   
-      // For development purposes, we'll navigate to dashboard
-      // In production, the user would need to verify their email first
       navigate("/dashboard");
     } catch (error: any) {
       console.error("Signup error:", error);
