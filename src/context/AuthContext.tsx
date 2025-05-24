@@ -25,46 +25,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Initialize auth and set up session listener
   useEffect(() => {
-    // Set up auth state change listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log("Auth state changed:", event);
-        if (session && session.user) {
-          // Get user profile with role information
-          await fetchUserProfile(session.user.id);
-        } else {
-          setUser(null);
-          setIsAuthenticated(false);
-          setIsLoading(false);
+    console.log("AuthProvider initializing...");
+    let authStateSubscription: { unsubscribe: () => void } | null = null;
+
+    // Set up auth state change listener first
+    const setupAuthListener = () => {
+      console.log("Setting up auth state listener");
+      const { data } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          console.log("Auth state changed:", event, !!session);
+          
+          if (session?.user) {
+            console.log("Session found, fetching user profile");
+            // Get user profile with role information
+            await fetchUserProfile(session.user.id);
+          } else {
+            console.log("No session, clearing user state");
+            setUser(null);
+            setIsAuthenticated(false);
+            setIsLoading(false);
+          }
         }
-      }
-    );
+      );
+      
+      authStateSubscription = data.subscription;
+    };
 
     // Check for existing session
-    const initializeAuth = async () => {
+    const checkExistingSession = async () => {
       try {
+        console.log("Checking for existing session");
         const { data: { session } } = await supabase.auth.getSession();
-        if (session && session.user) {
+        
+        if (session?.user) {
+          console.log("Existing session found");
           await fetchUserProfile(session.user.id);
         } else {
+          console.log("No existing session");
           setIsLoading(false);
         }
       } catch (error) {
-        console.error("Error initializing auth:", error);
+        console.error("Error checking session:", error);
         setIsLoading(false);
       }
     };
 
-    initializeAuth();
+    // First set up listener, then check for session
+    setupAuthListener();
+    checkExistingSession();
 
     // Cleanup subscription on unmount
     return () => {
-      subscription.unsubscribe();
+      console.log("Cleaning up auth subscription");
+      if (authStateSubscription) {
+        authStateSubscription.unsubscribe();
+      }
     };
   }, []);
 
   // Fetch user profile with role from the profiles table
   const fetchUserProfile = async (userId: string) => {
+    console.log("Fetching user profile for ID:", userId);
     try {
       const { data: profile, error } = await supabase
         .from("profiles")
@@ -73,7 +94,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (error) {
-        // If no profile found, attempt to create one
         if (error.code === 'PGRST116') {
           console.log("No profile found, creating one...");
           return await createUserProfile(userId);
@@ -103,6 +123,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await supabase.auth.signOut();
       setUser(null);
       setIsAuthenticated(false);
+      toast({
+        title: "Authentication Error",
+        description: "Failed to load your profile. Please log in again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -110,6 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Create a user profile if one doesn't exist
   const createUserProfile = async (userId: string) => {
+    console.log("Creating new user profile for ID:", userId);
     try {
       // First get user data from auth
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -179,6 +205,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (email: string, password: string) => {
+    console.log("Login attempt for:", email);
     setIsLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -211,17 +238,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
       navigate("/dashboard");
     } catch (error: any) {
+      console.error("Login error:", error);
       toast({
         title: "Login Failed",
         description: error.message || "Please check your credentials and try again",
         variant: "destructive",
       });
-    } finally {
       setIsLoading(false);
     }
   };
 
   const signup = async (email: string, password: string, name: string, role: UserRole) => {
+    console.log("Signup attempt for:", email);
     setIsLoading(true);
     try {
       // Sign up with Supabase and include name and role in metadata
@@ -281,6 +309,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    console.log("Logging out user");
     setIsLoading(true);
     try {
       await supabase.auth.signOut();
@@ -292,6 +321,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       navigate("/");
     } catch (error: any) {
+      console.error("Logout error:", error);
       toast({
         title: "Logout Failed",
         description: error.message || "An error occurred during logout",

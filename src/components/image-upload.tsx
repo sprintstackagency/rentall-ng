@@ -13,25 +13,48 @@ interface ImageUploadProps {
   maxImages?: number;
   bucketName?: string;
   folderPath?: string;
+  singleImage?: boolean;
+  className?: string;
+  imageClassName?: string;
+  variant?: "square" | "avatar" | "banner";
 }
 
 export function ImageUpload({
   images,
   onChange,
   maxImages = 5,
-  bucketName = "equipment",
-  folderPath = "items",
+  bucketName = "images",
+  folderPath = "general",
+  singleImage = false,
+  className = "",
+  imageClassName = "",
+  variant = "square",
 }: ImageUploadProps) {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
 
+  // Create a className based on the variant
+  const getContainerClassName = () => {
+    switch (variant) {
+      case "avatar":
+        return "relative rounded-full overflow-hidden";
+      case "banner":
+        return "relative w-full aspect-[3/1] overflow-hidden";
+      default:
+        return "relative aspect-square overflow-hidden";
+    }
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    // If single image mode, we replace the current image
+    const newImages = singleImage ? [] : [...images];
+
     // Check if adding these files would exceed the max
-    if (images.length + files.length > maxImages) {
+    if (!singleImage && newImages.length + files.length > maxImages) {
       toast({
         title: "Too many images",
         description: `You can only upload a maximum of ${maxImages} images`,
@@ -42,7 +65,7 @@ export function ImageUpload({
 
     setIsUploading(true);
     setUploadProgress(0);
-    const newImages: string[] = [...images];
+    
     const totalFiles = files.length;
     let completedFiles = 0;
 
@@ -52,6 +75,17 @@ export function ImageUpload({
         const fileExt = file.name.split(".").pop();
         const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
         const filePath = `${folderPath}/${fileName}`;
+
+        // Check if the bucket exists, if not create it
+        const { data: buckets } = await supabase.storage.listBuckets();
+        const bucketExists = buckets?.some(b => b.name === bucketName);
+        
+        if (!bucketExists) {
+          await supabase.storage.createBucket(bucketName, {
+            public: true,
+            fileSizeLimit: 10485760, // 10MB
+          });
+        }
 
         // Upload to Supabase Storage
         const { data, error } = await supabase.storage
@@ -99,70 +133,120 @@ export function ImageUpload({
     onChange(newImages);
   };
 
-  return (
-    <div className="space-y-4">
-      <Label>Images</Label>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-        {images.map((img, index) => (
-          <div key={index} className="relative group aspect-square">
+  const renderPreview = () => {
+    if (singleImage) {
+      // Single image mode (profile picture, etc.)
+      if (images.length > 0) {
+        return (
+          <div className={`${getContainerClassName()} ${imageClassName}`}>
             <img
-              src={img}
-              alt={`Image ${index + 1}`}
-              className="w-full h-full object-cover rounded-md border"
+              src={images[0]}
+              alt="Uploaded image"
+              className="w-full h-full object-cover"
             />
             <button
               type="button"
               className="absolute top-2 right-2 bg-background/80 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={() => removeImage(index)}
+              onClick={() => removeImage(0)}
             >
               <Trash className="h-4 w-4 text-destructive" />
             </button>
           </div>
-        ))}
-
-        {images.length < maxImages && (
-          <div className="aspect-square">
-            <Label
-              htmlFor="image-upload"
-              className="h-full rounded-md border-2 border-dashed flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground hover:border-brand transition-colors cursor-pointer"
-            >
-              {isUploading ? (
-                <div className="flex flex-col items-center">
-                  <Loader2 className="h-6 w-6 animate-spin mb-2" />
-                  <span className="text-xs">{uploadProgress}%</span>
-                </div>
-              ) : (
-                <>
-                  <Upload className="h-6 w-6" />
-                  <span className="text-xs">Add Image</span>
-                </>
-              )}
-              <Input
-                id="image-upload"
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                multiple
-                disabled={isUploading}
-                onChange={handleFileChange}
+        );
+      } else {
+        return (
+          <div className={`${getContainerClassName()} ${imageClassName} border-2 border-dashed flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground hover:border-brand transition-colors`}>
+            {isUploading ? (
+              <div className="flex flex-col items-center">
+                <Loader2 className="h-6 w-6 animate-spin mb-2" />
+                <span className="text-xs">{uploadProgress}%</span>
+              </div>
+            ) : (
+              <>
+                <Upload className="h-6 w-6" />
+                <span className="text-xs">Upload</span>
+              </>
+            )}
+          </div>
+        );
+      }
+    } else {
+      // Multiple images mode (listing images, etc.)
+      return (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+          {images.map((img, index) => (
+            <div key={index} className="relative group aspect-square">
+              <img
+                src={img}
+                alt={`Image ${index + 1}`}
+                className="w-full h-full object-cover rounded-md border"
               />
-            </Label>
-          </div>
-        )}
-
-        {images.length === 0 && (
-          <div className="col-span-full text-center p-4 border rounded-md border-dashed">
-            <div className="flex flex-col items-center justify-center text-muted-foreground">
-              <ImageIcon className="h-10 w-10 mb-2" />
-              <p className="text-sm mb-2">No images uploaded yet</p>
-              <p className="text-xs mb-4">Upload up to {maxImages} images</p>
+              <button
+                type="button"
+                className="absolute top-2 right-2 bg-background/80 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => removeImage(index)}
+              >
+                <Trash className="h-4 w-4 text-destructive" />
+              </button>
             </div>
-          </div>
-        )}
-      </div>
-      <p className="text-sm text-muted-foreground mt-2">
-        Upload up to {maxImages} images. Recommended size: 800x600px or larger.
-      </p>
+          ))}
+
+          {images.length < maxImages && (
+            <div className="aspect-square">
+              <Label
+                htmlFor="image-upload"
+                className="h-full rounded-md border-2 border-dashed flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground hover:border-brand transition-colors cursor-pointer"
+              >
+                {isUploading ? (
+                  <div className="flex flex-col items-center">
+                    <Loader2 className="h-6 w-6 animate-spin mb-2" />
+                    <span className="text-xs">{uploadProgress}%</span>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="h-6 w-6" />
+                    <span className="text-xs">Add Image</span>
+                  </>
+                )}
+              </Label>
+            </div>
+          )}
+
+          {images.length === 0 && (
+            <div className="col-span-full text-center p-4 border rounded-md border-dashed">
+              <div className="flex flex-col items-center justify-center text-muted-foreground">
+                <ImageIcon className="h-10 w-10 mb-2" />
+                <p className="text-sm mb-2">No images uploaded yet</p>
+                <p className="text-xs mb-4">Upload up to {maxImages} images</p>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+  };
+
+  return (
+    <div className={`space-y-4 ${className}`}>
+      {!singleImage && <Label>Images</Label>}
+      
+      {renderPreview()}
+      
+      <Input
+        id="image-upload"
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        multiple={!singleImage}
+        disabled={isUploading}
+        onChange={handleFileChange}
+      />
+      
+      {!singleImage && (
+        <p className="text-sm text-muted-foreground mt-2">
+          Upload up to {maxImages} images. Recommended size: 800x600px or larger.
+        </p>
+      )}
     </div>
   );
 }

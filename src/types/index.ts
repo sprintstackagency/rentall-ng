@@ -1,14 +1,14 @@
-
 export type UserRole = 'renter' | 'vendor' | 'admin';
 
 export interface User {
   id: string;
+  name: string;
   email: string;
   role: UserRole;
-  name: string;
   phone?: string;
   address?: string;
   createdAt: string;
+  avatar?: string;
 }
 
 export interface Item {

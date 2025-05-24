@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Pencil, User, Phone, Mail, MapPin, Shield } from "lucide-react";
-import { usersService } from "@/services/api";
+import { ImageUpload } from "@/components/image-upload";
+import { supabase } from "@/integrations/supabase/client";
 
 export function ProfilePage() {
   const { user } = useAuth();
@@ -21,6 +22,7 @@ export function ProfilePage() {
     email: user?.email || "",
     phone: user?.phone || "",
     address: user?.address || "",
+    avatar: [] as string[],
   });
 
   // Update form data when user data changes
@@ -31,6 +33,7 @@ export function ProfilePage() {
         email: user.email || "",
         phone: user.phone || "",
         address: user.address || "",
+        avatar: user.avatar ? [user.avatar] : [],
       });
     }
   }, [user]);
@@ -40,6 +43,13 @@ export function ProfilePage() {
     setFormData((prev) => ({
       ...prev,
       [name]: value,
+    }));
+  };
+
+  const handleAvatarChange = (images: string[]) => {
+    setFormData((prev) => ({
+      ...prev,
+      avatar: images,
     }));
   };
 
@@ -58,11 +68,19 @@ export function ProfilePage() {
     try {
       setIsLoading(true);
       
-      await usersService.updateProfile(user.id, {
+      const updateData = {
         name: formData.name,
         phone: formData.phone,
         address: formData.address,
-      });
+        avatar: formData.avatar.length > 0 ? formData.avatar[0] : null,
+      };
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update(updateData)
+        .eq('id', user.id);
+        
+      if (error) throw error;
       
       toast({
         title: "Profile updated",
@@ -119,9 +137,35 @@ export function ProfilePage() {
                     <div className="space-y-6">
                       <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8">
                         <div className="flex-shrink-0">
-                          <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center">
-                            <User className="h-12 w-12 text-muted-foreground" />
-                          </div>
+                          {isEditing ? (
+                            <Label 
+                              htmlFor="image-upload" 
+                              className="cursor-pointer block"
+                            >
+                              <ImageUpload
+                                images={formData.avatar}
+                                onChange={handleAvatarChange}
+                                maxImages={1}
+                                singleImage={true}
+                                bucketName="avatars"
+                                folderPath="profiles"
+                                variant="avatar"
+                                imageClassName="w-24 h-24 rounded-full"
+                              />
+                            </Label>
+                          ) : (
+                            <div className="w-24 h-24 rounded-full overflow-hidden bg-muted flex items-center justify-center">
+                              {formData.avatar.length > 0 ? (
+                                <img 
+                                  src={formData.avatar[0]} 
+                                  alt={formData.name} 
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <User className="h-12 w-12 text-muted-foreground" />
+                              )}
+                            </div>
+                          )}
                         </div>
                         
                         <div className="space-y-1">

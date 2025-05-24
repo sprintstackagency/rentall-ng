@@ -26,6 +26,7 @@ export function LoginForm() {
       // Navigation is handled in the login function
     } catch (error) {
       console.error("Login error:", error);
+      // Error handling is done in the login function
     }
   };
 
@@ -39,6 +40,7 @@ export function LoginForm() {
           placeholder="your@email.com" 
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          disabled={isLoading}
           required
         />
       </div>
@@ -56,11 +58,16 @@ export function LoginForm() {
           placeholder="••••••••" 
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          disabled={isLoading}
           required
         />
       </div>
       
-      <Button type="submit" className="w-full bg-brand hover:bg-brand-dark" disabled={isLoading}>
+      <Button 
+        type="submit" 
+        className="w-full bg-brand hover:bg-brand-dark" 
+        disabled={isLoading}
+      >
         {isLoading ? (
           <>
             <Loader className="mr-2 h-4 w-4 animate-spin" /> Please wait
